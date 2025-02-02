@@ -2,7 +2,7 @@
 
 This is a React Native component that recreates the iOS 17 Smart Stack widget interaction and animation. It provides a vertically scrollable stack of widgets with smooth expansion/collapse animations and navigation dots.
 
-[Demo GIF/Video placeholder]
+![SmartStack Demo](./example/assets/widget-stack-smartstack-expanded.png)
 
 ## Features
 
