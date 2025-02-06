@@ -13,6 +13,7 @@ import Animated, {
   Extrapolation,
   runOnJS,
   withSpring,
+  type SharedValue,
 } from 'react-native-reanimated';
 import Carousel from 'react-native-reanimated-carousel';
 import type { SmartStackProps } from './types';
@@ -37,12 +38,10 @@ const WidgetLabel = React.memo(function WidgetLabel({
 }) {
   return (
     <Animated.Text
-      style={{
-        fontSize: 12,
-        lineHeight: 16,
-        color: '#FFFFFF',
-        opacity: isVisible ? 1 : 0,
-      }}
+      style={[
+        styles.labelText,
+        { opacity: isVisible ? 1 : 0 }
+      ]}
     >
       {label}
     </Animated.Text>
@@ -84,6 +83,29 @@ export const SmartStack: React.FC<SmartStackProps> = ({
     heightProgress.value = withSpring(0, {
       damping: 20,
       stiffness: 200,
+    });
+  };
+
+  // Fix the Hook rules violation by converting to a proper custom Hook
+  const useItemAnimatedStyle = (animationValue: SharedValue<number>) => {
+    return useAnimatedStyle(() => {
+      const scale = interpolate(
+        animationValue.value,
+        [-1, 0, 1],
+        [0.9, 1, 0.9],
+        Extrapolation.CLAMP
+      );
+
+      const translateY = interpolate(
+        animationValue.value,
+        [-1, 0, 1],
+        [-WINDOW_HEIGHT * 0.05, 0, WINDOW_HEIGHT * 0.05],
+        Extrapolation.CLAMP
+      );
+
+      return {
+        transform: [{ scale }, { translateY }],
+      };
     });
   };
 
@@ -138,11 +160,14 @@ export const SmartStack: React.FC<SmartStackProps> = ({
             pagingEnabled={false}
             enabled={true}
             defaultIndex={0}
-            mode="parallax"
-            modeConfig={{
-              parallaxScrollingScale: 1,
-              parallaxScrollingOffset: 0.8,
-              parallaxAdjacentItemScale: 0.9,
+            renderItem={({ item, index, animationValue }) => {
+              const animatedStyle = useItemAnimatedStyle(animationValue);
+              
+              return (
+                <Animated.View style={[styles.itemWrapper, animatedStyle]}>
+                  <Container widget={item} index={index} />
+                </Animated.View>
+              );
             }}
             withAnimation={{
               type: 'spring',
@@ -171,11 +196,6 @@ export const SmartStack: React.FC<SmartStackProps> = ({
             }}
             // (3) Use onSnapToItem as the definitive "settled" point and start delay
             onSnapToItem={handleSnapToItem}
-            renderItem={({ item, index }) => (
-              <View style={styles.itemWrapper}>
-                <Container widget={item} index={index} />
-              </View>
-            )}
           />
         </View>
 
@@ -186,9 +206,7 @@ export const SmartStack: React.FC<SmartStackProps> = ({
         />
       </View>
       <WidgetLabel
-        label={
-          widgets[activeIndex]?.name ? widgets[activeIndex].name : 'Test name'
-        }
+        label={widgets[activeIndex]?.name ?? 'Test name'}
         isVisible={true}
       />
     </View>
@@ -226,5 +244,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,
+  },
+  labelText: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#FFFFFF',
   },
 });
