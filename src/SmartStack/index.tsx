@@ -3,16 +3,23 @@
  * @description Main entry point for the SmartStack component.
  * This component combines the animated Shell, a reanimated Carousel,
  * and navigational dots to mimic an iOS-like widget stack.
+ *
+ * NOTE: To address the TypeScript version warning, you must
+ * update your package.json devDependencies:
+ *
+ *  "typescript": "^5.1.6"
+ *
  *******************************************************/
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
 import Animated, {
   interpolate,
-  useAnimatedStyle,
   Extrapolation,
   runOnJS,
   withSpring,
+  useSharedValue,
+  useAnimatedStyle,
   type SharedValue,
 } from 'react-native-reanimated';
 import Carousel from 'react-native-reanimated-carousel';
@@ -25,9 +32,43 @@ import { NavigationDots } from './Navigation';
 const { WINDOW_WIDTH, WINDOW_HEIGHT } = getDimensions();
 
 /**
- * Displays the widget label with conditional opacity.
- * @param label - The text to display.
- * @param isVisible - Whether the text should be fully visible or hidden.
+ * A sub-component for rendering an individual Carousel item with reanimated styling.
+ * This ensures we don't violate the “Hook Rules” by calling hooks inside a render callback.
+ */
+const AnimatedItem: React.FC<{
+  item: any; // or a stronger type if you have it
+  index: number;
+  animationValue: SharedValue<number>;
+}> = ({ item, index, animationValue }) => {
+  const animatedStyle = useAnimatedStyle(() => {
+    const scale = interpolate(
+      animationValue.value,
+      [-1, 0, 1],
+      [0.9, 1, 0.9],
+      Extrapolation.CLAMP
+    );
+
+    const translateY = interpolate(
+      animationValue.value,
+      [-1, 0, 1],
+      [-WINDOW_HEIGHT * 0.05, 0, WINDOW_HEIGHT * 0.05],
+      Extrapolation.CLAMP
+    );
+
+    return {
+      transform: [{ scale }, { translateY }],
+    };
+  });
+
+  return (
+    <Animated.View style={[styles.itemWrapper, animatedStyle]}>
+      <Container widget={item} index={index} />
+    </Animated.View>
+  );
+};
+
+/**
+ * Displays the widget label with conditional opacity, moved away from inline styling.
  */
 const WidgetLabel = React.memo(function WidgetLabel({
   label,
@@ -40,7 +81,7 @@ const WidgetLabel = React.memo(function WidgetLabel({
     <Animated.Text
       style={[
         styles.labelText,
-        { opacity: isVisible ? 1 : 0 }
+        isVisible ? styles.labelVisible : styles.labelHidden,
       ]}
     >
       {label}
@@ -52,18 +93,54 @@ const WidgetLabel = React.memo(function WidgetLabel({
  * Main SmartStack component. Uses react-native-reanimated-carousel for
  * vertical swiping, triggers animated expansions and contractions of the
  * background shell, and tracks the active widget using a shared value.
+ *
  * @param widgets - Array of widgets to display in the stack.
- * @param heightProgress - A shared reanimated value controlling the expanded/contracted height.
+ * @param defaultExpanded - Whether the stack should be expanded by default.
+ * @param expanded - Whether the stack is currently expanded (for controlled usage).
+ * @param onExpandChange - Callback to handle changes to the expanded state.
+ * @param onIndexChange - Callback to handle changes to the active index.
  */
 export const SmartStack: React.FC<SmartStackProps> = ({
   widgets,
-  heightProgress,
+  defaultExpanded = false,
+  expanded,
+  onExpandChange,
+  onIndexChange,
 }) => {
   // Track the active item index for navigation dots
   const [activeIndex, setActiveIndex] = useState(0);
 
   // We'll store the timer ID used for contracting after a delay
   const contractTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const isControlled = expanded !== undefined;
+  const localExpanded = useSharedValue(defaultExpanded ? 1 : 0);
+
+  /**
+   * Helper to expand or collapse the stack.
+   */
+  const setExpanded = (value: boolean) => {
+    if (!isControlled) {
+      localExpanded.value = withSpring(value ? 1 : 0, {
+        damping: 20,
+        stiffness: 200,
+      });
+    }
+    onExpandChange?.(value);
+  };
+
+  /**
+   * Sync localExpanded with external `expanded` prop if in controlled mode.
+   */
+  useEffect(() => {
+    if (isControlled && expanded !== undefined) {
+      localExpanded.value = withSpring(expanded ? 1 : 0, {
+        damping: 20,
+        stiffness: 200,
+      });
+    }
+    // Add localExpanded to dependencies for lint (though it's stable).
+  }, [expanded, isControlled, localExpanded]);
 
   /**
    * Cancels any existing shell contraction timer, ensuring we don't
@@ -77,66 +154,32 @@ export const SmartStack: React.FC<SmartStackProps> = ({
   };
 
   /**
-   * Called when we want to fully collapse the shell (heightProgress back to 0).
+   * Called when we want to fully collapse the shell (localExpanded back to 0).
    */
   const contractShell = () => {
-    heightProgress.value = withSpring(0, {
-      damping: 20,
-      stiffness: 200,
-    });
-  };
-
-  // Fix the Hook rules violation by converting to a proper custom Hook
-  const useItemAnimatedStyle = (animationValue: SharedValue<number>) => {
-    return useAnimatedStyle(() => {
-      const scale = interpolate(
-        animationValue.value,
-        [-1, 0, 1],
-        [0.9, 1, 0.9],
-        Extrapolation.CLAMP
-      );
-
-      const translateY = interpolate(
-        animationValue.value,
-        [-1, 0, 1],
-        [-WINDOW_HEIGHT * 0.05, 0, WINDOW_HEIGHT * 0.05],
-        Extrapolation.CLAMP
-      );
-
-      return {
-        transform: [{ scale }, { translateY }],
-      };
-    });
+    setExpanded(false);
   };
 
   /**
    * Fired when carousel item snapping animation completes,
    * used here to schedule the delayed collapse after an idle period.
-   * @param index - The index of the snapped widget.
    */
   const handleSnapToItem = (index: number) => {
     console.log(`[SmartStack] Snapped to index: ${index}`);
     setActiveIndex(index);
+    onIndexChange?.(index);
 
-    // Cancel any existing timers before starting a fresh one
     cancelContraction();
-
-    // Wait 350ms post-snap, then contract the shell
     contractTimerRef.current = setTimeout(() => {
       runOnJS(contractShell)();
       contractTimerRef.current = null;
     }, 350);
   };
 
-  // Give the Shell a slight offset animation (top, left)
+  // Give the Shell a slight offset animation (top, left) based on expansion
   const shellStyle = useAnimatedStyle(() => ({
-    top: interpolate(heightProgress.value, [0, 1], [3, 0], Extrapolation.CLAMP),
-    left: interpolate(
-      heightProgress.value,
-      [0, 1],
-      [3, 0],
-      Extrapolation.CLAMP
-    ),
+    top: interpolate(localExpanded.value, [0, 1], [3, 0], Extrapolation.CLAMP),
+    left: interpolate(localExpanded.value, [0, 1], [3, 0], Extrapolation.CLAMP),
     position: 'absolute',
     zIndex: 0,
   }));
@@ -147,7 +190,7 @@ export const SmartStack: React.FC<SmartStackProps> = ({
         <View style={styles.wrapper}>
           {/* The Shell in the background */}
           <Animated.View style={shellStyle}>
-            <Shell heightProgress={heightProgress} />
+            <Shell heightProgress={localExpanded} />
           </Animated.View>
 
           <Carousel
@@ -156,19 +199,17 @@ export const SmartStack: React.FC<SmartStackProps> = ({
             loop={widgets.length > 1}
             width={WINDOW_WIDTH}
             height={WINDOW_HEIGHT}
-            snapEnabled={true}
+            snapEnabled
             pagingEnabled={false}
-            enabled={true}
+            enabled
             defaultIndex={0}
-            renderItem={({ item, index, animationValue }) => {
-              const animatedStyle = useItemAnimatedStyle(animationValue);
-              
-              return (
-                <Animated.View style={[styles.itemWrapper, animatedStyle]}>
-                  <Container widget={item} index={index} />
-                </Animated.View>
-              );
-            }}
+            renderItem={({ item, index, animationValue }) => (
+              <AnimatedItem
+                item={item}
+                index={index}
+                animationValue={animationValue}
+              />
+            )}
             withAnimation={{
               type: 'spring',
               config: {
@@ -182,19 +223,16 @@ export const SmartStack: React.FC<SmartStackProps> = ({
             // (1) Expand immediately on gesture begin and cancel any pending contraction
             onScrollBegin={() => {
               console.log('[SmartStack] onScrollBegin -> expanding Shell');
-              heightProgress.value = withSpring(1, {
-                damping: 20,
-                stiffness: 200,
-              });
-
-              // Clear any existing timer before starting a new delay
+              if (!isControlled) {
+                setExpanded(true);
+              }
               cancelContraction();
             }}
             // (2) We log onScrollEnd but no longer contract here
             onScrollEnd={() => {
               console.log('[SmartStack] onScrollEnd triggered');
             }}
-            // (3) Use onSnapToItem as the definitive "settled" point and start delay
+            // (3) Use onSnapToItem as the definitive "settled" point and start the delay
             onSnapToItem={handleSnapToItem}
           />
         </View>
@@ -202,9 +240,10 @@ export const SmartStack: React.FC<SmartStackProps> = ({
         <NavigationDots
           activeIndex={activeIndex}
           totalCount={widgets.length}
-          heightProgress={heightProgress}
+          heightProgress={localExpanded}
         />
       </View>
+
       <WidgetLabel
         label={widgets[activeIndex]?.name ?? 'Test name'}
         isVisible={true}
@@ -220,6 +259,12 @@ const baseDimensions = {
 };
 
 const styles = StyleSheet.create({
+  outerContainer: {
+    flexShrink: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
   container: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -239,15 +284,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 1,
   },
-  outerContainer: {
-    flexShrink: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-  },
   labelText: {
     fontSize: 12,
     lineHeight: 16,
     color: '#FFFFFF',
+  },
+  // Moved inline opacity styles here
+  labelVisible: {
+    opacity: 1,
+  },
+  labelHidden: {
+    opacity: 0,
   },
 });

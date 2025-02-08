@@ -5,13 +5,11 @@
  * and supporting component properties.
  *******************************************************/
 
-import Animated from 'react-native-reanimated';
-
 /**
  * Represents the data for a single widget in the stack.
  */
 export interface Widget {
-  image: any;
+  image?: any;
   id: string;
   name: string;
   component?: React.ComponentType<any>;
@@ -26,7 +24,14 @@ export interface Widget {
  */
 export interface SmartStackProps {
   widgets: Widget[];
-  heightProgress: Animated.SharedValue<number>;
+  // Optional: let users define whether the stack starts expanded
+  defaultExpanded?: boolean;
+  // Optional controlled prop: if provided, the parent fully controls expand state
+  expanded?: boolean;
+  // Callback fired when expand/collapse state changes
+  onExpandChange?: (isExpanded: boolean) => void;
+  // Callback fired when the active widget index changes on swipe
+  onIndexChange?: (index: number) => void;
 }
 
 /**

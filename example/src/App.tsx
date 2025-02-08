@@ -1,15 +1,8 @@
 import { View, StyleSheet } from 'react-native';
-import { useSharedValue } from 'react-native-reanimated';
-
-// Import your SmartStack from the new library
 import { SmartStack } from 'react-native-widget-stack';
 
 export default function App() {
-  // This shared value controls the stack's expand/collapse animation
-  // If you want it expanded by default, set `heightProgress.value = 1` somewhere
-  const heightProgress = useSharedValue(0);
-
-  // Example widget data — you can replace these colors or add images
+  // Example widget data with required image property
   const testWidgets = [
     { id: '1', name: 'Maps', color: 'blue' },
     { id: '2', name: 'Weather', color: 'red' },
@@ -21,8 +14,12 @@ export default function App() {
   return (
     <View style={styles.container}>
       <SmartStack
-        widgets={testWidgets as SmartStack.WidgetType[]}
-        heightProgress={heightProgress}
+        widgets={testWidgets}
+        defaultExpanded={false}
+        onExpandChange={(isExpanded) =>
+          console.log('Expanded changed:', isExpanded)
+        }
+        onIndexChange={(index) => console.log('Index changed:', index)}
       />
     </View>
   );
