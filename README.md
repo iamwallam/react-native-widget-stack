@@ -22,7 +22,7 @@ npm install react-native-widget-stack
 ## Dependencies
 This library needs these dependencies to be installed in your project before you can use it:
 ```js
-npm install react-native-gesture-handler react-native-reanimated react-native-reanimated-carousel expo-blur 
+npm install react-native-gesture-handler react-native-reanimated react-native-reanimated-carousel
 ```
 **NOTE:**
 **React Native Gesture Handler** needs extra steps to finalize its installation, please follow their [installation instructions](https://docs.swmansion.com/react-native-gesture-handler/docs/installation). Please make sure to wrap your App with GestureHandlerRootView when you've upgraded to React Native Gesture Handler ^2.
@@ -31,26 +31,33 @@ npm install react-native-gesture-handler react-native-reanimated react-native-re
 
 ## Basic Usage
 
-```ts
+```tsx
+import { View, StyleSheet } from 'react-native';
 import { SmartStack } from 'react-native-widget-stack';
-import { useSharedValue } from 'react-native-reanimated';
 
-function App() {
-const heightProgress = useSharedValue(0);
+export default function App() {
+  const widgets = [
+    { id: '1', name: 'Maps', color: 'blue' },
+    { id: '2', name: 'Weather', color: 'red' },
+    { id: '3', name: 'News', color: 'green' },
+  ];
 
-const widgets = [
-{ id: '1', name: 'Weather', color: '#007AFF', component: WeatherWidget },
-{ id: '2', name: 'Calendar', color: '#FF3B30', component: CalendarWidget },
-{ id: '3', name: 'Photos', color: '#FF9500', component: PhotoWidget },
-];
-
-return (
-<SmartStack
-widgets={widgets}
-heightProgress={heightProgress}
-/>
-);
+  return (
+    <View style={styles.container}>
+      <SmartStack widgets={widgets} />
+    </View>
+  );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#000000',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 50,
+  },
+});
 ```
 
 ## Widget Configuration
